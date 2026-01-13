@@ -4,15 +4,16 @@ from PIL import Image
 from src.model.utils import get_transformer
 from src.backend.api.core.dependencies import get_model, get_model_config
 from src.backend.api.schemas.prediction import PredictionResponse
+from src.backend.api.core.config import settings
 
 router = APIRouter(prefix="/predict")
 
 @router.post("", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...), model = Depends(get_model), config = Depends(get_model_config)):
     image = Image.open(file.file).convert("RGB")
-    transform = get_transformer(config["imagenet_mean"], config["imagenet_std"])
-    x = transform(image).unsqueeze(0)
-
+    transform = get_transformer(mean=config["imagenet_mean"], std=config["imagenet_std"], resize_shape=(config["input_size"][1], config["input_size"][2]))
+    x = transform(image).unsqueeze(0).to(settings.DEVICE)
+    
     with torch.no_grad():
         logits = model(x)
         probs = torch.softmax(logits, dim=1).squeeze().tolist()
@@ -22,9 +23,9 @@ async def predict(file: UploadFile = File(...), model = Depends(get_model), conf
 
     return {
                 "prediction": prediction,
-                "probabilites": {
-                    config["classes"][0]: probs[0],
-                    config["classes"][1]: probs[1]
+                "probabilities": {
+                    config["classes"][0]: round(probs[0], 2),
+                    config["classes"][1]: round(probs[1], 2)
                 }
             }
          
