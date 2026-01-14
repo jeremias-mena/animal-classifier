@@ -9,9 +9,9 @@ def load_model(model_path, device):
     model = models.resnet50(weights=None)
     model.fc = torch.nn.Linear(2048, len(config["classes"]))
 
-    state_dict = torch.load(f"{model_path}/resnet50_best.pt", map_location=device)
+    state_dict = torch.load(f"{model_path}/resnet50_best.pt", map_location=device, weights_only=True)
 
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict["model_state"])
     model.to(device)
     model.eval()
 
