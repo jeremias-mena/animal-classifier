@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 import torch
 from PIL import Image
 from src.model.utils import get_transformer
@@ -10,22 +10,27 @@ router = APIRouter(prefix="/predict")
 
 @router.post("", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...), model = Depends(get_model), config = Depends(get_model_config)):
-    image = Image.open(file.file).convert("RGB")
-    transform = get_transformer(mean=config["imagenet_mean"], std=config["imagenet_std"], resize_shape=(config["input_size"][1], config["input_size"][2]))
-    x = transform(image).unsqueeze(0).to(settings.DEVICE)
-    
-    with torch.no_grad():
-        logits = model(x)
-        probs = torch.softmax(logits, dim=1).squeeze().tolist()
+    try:
+        image = Image.open(file.file).convert("RGB")
+        transform = get_transformer(mean=config["imagenet_mean"], std=config["imagenet_std"], resize_shape=(config["input_size"][1], config["input_size"][2]))
+        x = transform(image).unsqueeze(0).to(settings.DEVICE)
 
-        prediction_index = int(torch.argmax(torch.tensor(probs)))
-        prediction = config["classes"][prediction_index]
+        with torch.no_grad():
+            logits = model(x)
+            probs = torch.softmax(logits, dim=1).squeeze().tolist()
 
-    return {
-                "prediction": prediction,
-                "probabilities": {
-                    config["classes"][0]: round(probs[0], 2),
-                    config["classes"][1]: round(probs[1], 2)
+            prediction_index = int(torch.argmax(torch.tensor(probs)))
+            prediction = config["classes"][prediction_index]
+
+        return {
+                    "prediction": prediction,
+                    "probabilities": {
+                        config["classes"][0]: probs[0],
+                        config["classes"][1]: probs[1],
+                    }
                 }
-            }
+    except:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image file")    
+    
+    
          
